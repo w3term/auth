@@ -153,14 +153,17 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		Name:     "auth_token",
 		Value:    tokenString,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   false, // Temporary during dev
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   3600, // 1 hour
 		Path:     "/",
 	})
 
 	// Redirect back to the Hugo site
-	http.Redirect(w, r, os.Getenv("HUGO_SITE_URL")+"/terminal", http.StatusTemporaryRedirect)
+	redirectURL := fmt.Sprintf("%s?auth_success=true&t=%d",
+		os.Getenv("HUGO_SITE_URL"),
+		time.Now().Unix()) // Add timestamp to prevent caching
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {
