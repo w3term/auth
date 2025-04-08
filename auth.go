@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -38,7 +39,32 @@ func min(a, b int) int {
 	return b
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
+	(*w).Header().Set("Access-Control-Allow-Credentials", "true")
+	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
+
 func main() {
+	// Add this before your router definition
+	corsMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Then wrap your router with this middleware
 	router := mux.NewRouter()
 
 	// GitHub OAuth endpoints
@@ -54,7 +80,8 @@ func main() {
 		port = "3000"
 	}
 	log.Printf("Auth service running on port %s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, router))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(router)))
+
 }
 
 func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +98,24 @@ func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
+
+	log.Printf("Incoming Request Headers:")
+	for k, v := range r.Header {
+		log.Printf("%s: %v", k, v)
+	}
+
+	log.Printf("Client IP: %s", r.RemoteAddr)
+	log.Printf("User Agent: %s", r.UserAgent())
+
+	// Log all incoming request details
+	log.Printf("Incoming GitHub Callback Request:")
+	log.Printf("Full URL: %s", r.URL.String())
+	log.Printf("Query Parameters: %v", r.URL.Query())
+
+	// Log environment variables
+	hugoSiteURL := os.Getenv("HUGO_SITE_URL")
+	log.Printf("HUGO_SITE_URL: %s", hugoSiteURL)
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Code parameter is required", http.StatusBadRequest)
@@ -211,21 +256,50 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth_token",
 		Value:    tokenString,
-		HttpOnly: true,
-		Secure:   false, // Temporary during dev
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   3600, // 1 hour
+		HttpOnly: false,                // Change to false so JS can access it
+		Secure:   false,                // Keep false for localhost
+		SameSite: http.SameSiteLaxMode, // Change from StrictMode to LaxMode
+		MaxAge:   3600,                 // 1 hour
 		Path:     "/",
+		Domain:   "", // Empty domain for localhost
 	})
 
-	// Redirect back to the Hugo site
 	redirectURL := fmt.Sprintf("%s?auth_success=true&t=%d",
-		os.Getenv("HUGO_SITE_URL"),
-		time.Now().Unix()) // Add timestamp to prevent caching
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
+		hugoSiteURL, // Make sure this is exactly "http://localhost:8080"
+		time.Now().Unix())
+
+	log.Printf("Constructed Redirect Full URL: %s", redirectURL)
+
+	// Try using the parsed URL
+	parsedURL, err := url.Parse(redirectURL)
+	if err != nil {
+		log.Printf("Error parsing redirect URL: %v", err)
+		http.Error(w, "Failed to construct redirect", http.StatusInternalServerError)
+		return
+	}
+
+	// Try multiple redirect methods
+	log.Printf("Attempting redirect:")
+	log.Printf("1. Full URL: %s", redirectURL)
+	log.Printf("2. Parsed URL: %v", parsedURL)
+
+	// Method 1: Standard redirect
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+
+	// If that doesn't work, try manual header setting
+	w.Header().Set("Location", redirectURL)
+	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+
+	// Handle preflight OPTIONS request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 
 	// Get token from request
