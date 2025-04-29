@@ -113,8 +113,8 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Query Parameters: %v", r.URL.Query())
 
 	// Log environment variables
-	hugoSiteURL := os.Getenv("HUGO_SITE_URL")
-	log.Printf("HUGO_SITE_URL: %s", hugoSiteURL)
+	webSiteURL := os.Getenv("WEBSITE_URL")
+	log.Printf("WEBSITE_URL: %s", webSiteURL)
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -265,7 +265,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	redirectURL := fmt.Sprintf("%s?auth_success=true&t=%d",
-		hugoSiteURL, // Make sure this is exactly "http://localhost:8080"
+		webSiteURL,
 		time.Now().Unix())
 
 	log.Printf("Constructed Redirect Full URL: %s", redirectURL)
