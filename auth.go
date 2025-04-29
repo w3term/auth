@@ -296,7 +296,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
-// Extract cookie domain by removing "www." if present
+// Extract cookie domain
 func extractCookieDomain(host string) string {
 	// For localhost, use empty domain
 	if host == "localhost" || strings.HasPrefix(host, "localhost:") {
@@ -308,13 +308,16 @@ func extractCookieDomain(host string) string {
 		host = host[:colonIndex]
 	}
 
-	// If domain starts with www., remove it
-	if strings.HasPrefix(host, "www.") {
-		return host[4:]
+	// Split the host into parts
+	parts := strings.Split(host, ".")
+
+	// If there are fewer than 3 parts (e.g., example.com), just return the host
+	if len(parts) < 3 {
+		return host
 	}
 
-	// Otherwise return the host as is
-	return host
+	// Remove the first part (subdomain) and return the rest
+	return strings.Join(parts[1:], ".")
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {
