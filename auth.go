@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -252,16 +253,20 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get cookie domain
+	cookieDomain := extractCookieDomain(r.Host)
+	log.Printf("Setting cookie for domain: '%s' (from host: '%s')", cookieDomain, r.Host)
+
 	// Set cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth_token",
 		Value:    tokenString,
-		HttpOnly: false,                // Change to false so JS can access it
-		Secure:   false,                // Keep false for localhost
-		SameSite: http.SameSiteLaxMode, // Change from StrictMode to LaxMode
-		MaxAge:   3600,                 // 1 hour
+		HttpOnly: false,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600,
 		Path:     "/",
-		Domain:   "", // Empty domain for localhost
+		Domain:   cookieDomain,
 	})
 
 	redirectURL := fmt.Sprintf("%s?auth_success=true&t=%d",
@@ -289,6 +294,27 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// If that doesn't work, try manual header setting
 	w.Header().Set("Location", redirectURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+// Extract cookie domain by removing "www." if present
+func extractCookieDomain(host string) string {
+	// For localhost, use empty domain
+	if host == "localhost" || strings.HasPrefix(host, "localhost:") {
+		return ""
+	}
+
+	// Remove port if present
+	if colonIndex := strings.IndexByte(host, ':'); colonIndex != -1 {
+		host = host[:colonIndex]
+	}
+
+	// If domain starts with www., remove it
+	if strings.HasPrefix(host, "www.") {
+		return host[4:]
+	}
+
+	// Otherwise return the host as is
+	return host
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {
