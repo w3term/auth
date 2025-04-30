@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -104,6 +106,61 @@ func extractCookieDomain(host string) string {
 
 	// Remove the first part (subdomain) and return the rest
 	return strings.Join(parts[1:], ".")
+}
+
+// Auth helper
+
+// Checks if a user is a member of the specified GitHub organization
+func isUserInOrganization(accessToken string, username string) (bool, error) {
+	orgName := os.Getenv("GITHUB_ORG_NAME")
+	if orgName == "" {
+		log.Printf("GITHUB_ORG_NAME environment variable not set")
+		return false, fmt.Errorf("organization name not configured")
+	}
+
+	log.Printf("Checking if %s is a member of organization %s", username, orgName)
+
+	// Check if user is in the organization
+	orgCheckURL := fmt.Sprintf("https://api.github.com/orgs/%s/members/%s", orgName, username)
+
+	req, err := http.NewRequest("GET", orgCheckURL, nil)
+	if err != nil {
+		return false, err
+	}
+
+	// Important: Add the Authorization header with the OAuth token
+	req.Header.Set("Authorization", "token "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error making GitHub API request: %v", err)
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	log.Printf("GitHub API response: %d %s", resp.StatusCode, resp.Status)
+
+	// For debugging, dump response headers
+	log.Printf("Response headers:")
+	for name, values := range resp.Header {
+		log.Printf("  %s: %v", name, values)
+	}
+
+	// Status 204 No Content means the user is a member
+	if resp.StatusCode == 204 {
+		log.Printf("User %s is a member of organization %s", username, orgName)
+		return true, nil
+	} else if resp.StatusCode == 404 {
+		log.Printf("User %s is NOT a member of organization %s", username, orgName)
+		return false, nil
+	} else {
+		// Read and log the response body for other status codes
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Unexpected API response: %s", string(body))
+		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
 // Generic helpers

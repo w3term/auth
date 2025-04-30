@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -20,7 +21,7 @@ func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Using callback URL: %s", redirectURI)
 
 	authURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user",
+		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user,read:org",
 		clientID, redirectURI,
 	)
 
@@ -99,6 +100,22 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log the token response
+	if len(tokenResp.AccessToken) > 10 {
+		maskedToken := tokenResp.AccessToken[:5] + "..." + tokenResp.AccessToken[len(tokenResp.AccessToken)-5:]
+		log.Printf("Token response: token=%s, scope=%s, type=%s",
+			maskedToken, tokenResp.Scope, tokenResp.TokenType)
+	} else {
+		log.Printf("Warning: Received unexpectedly short access token")
+	}
+
+	// Check if the token includes the read:org scope
+	if tokenResp.Scope == "" {
+		log.Printf("Warning: No scope information in token response")
+	} else if !strings.Contains(tokenResp.Scope, "read:org") {
+		log.Printf("Warning: Access token does not have read:org scope, organization check may fail")
+	}
+
 	// Check if access token is empty
 	if tokenResp.AccessToken == "" {
 		log.Printf("Received empty access token from GitHub")
@@ -108,6 +125,12 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Received access token from GitHub: %s...", tokenResp.AccessToken[:min(10, len(tokenResp.AccessToken))])
+	log.Printf("Scope is %s", tokenResp.Scope)
+
+	// Check if the token includes the read:org scope
+	if !strings.Contains(tokenResp.Scope, "read:org") {
+		log.Printf("Warning: Access token does not have read:org scope, organization check may fail")
+	}
 
 	// Get user info from GitHub
 	userReq, err := http.NewRequest("GET", "https://api.github.com/user", nil)
@@ -164,6 +187,24 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Successfully retrieved GitHub user: ID=%d, Login=%s",
 		githubUser.ID, githubUser.Login)
+
+	// Check if user is in the specified organization
+	isOrgMember, err := isUserInOrganization(tokenResp.AccessToken, githubUser.Login)
+	if err != nil {
+		log.Printf("Error checking organization membership: %v", err)
+		http.Error(w, "Failed to verify organization membership", http.StatusInternalServerError)
+		return
+	}
+
+	if !isOrgMember {
+		log.Printf("Unauthorized user attempted login: %s (not in organization)", githubUser.Login)
+
+		// Redirect to an unauthorized page
+		http.Error(w, "User not in requested organization", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Authorized user logged in: %s (organization member)", githubUser.Login)
 
 	// Create JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
