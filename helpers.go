@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -45,8 +46,11 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
+		log.Printf("CORS request from origin: %s", origin)
+
 		// Only set CORS headers for allowed origins
 		if isOriginAllowed(origin) {
+			log.Printf("Origin allowed: %s", origin)
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -56,8 +60,12 @@ func corsMiddleware(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
+
 			next.ServeHTTP(w, r)
 		} else {
+			log.Printf("Origin rejected: %s", origin)
+			log.Printf("Allowed origins: %v", getAllowedOrigins())
+
 			// Return an error if the origin is not allowed
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte("Cross-origin request not allowed"))
@@ -68,6 +76,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 // Sets CORS headers
 func enableCors(w *http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
+
+	log.Printf("checking if CORS must be enabled for origin: %s", origin)
 
 	// Only sets Access-Control-Allow-Origin header if the origin is allowed
 	if isOriginAllowed(origin) {
