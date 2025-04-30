@@ -1,4 +1,4 @@
-module github.com/lucj/cka-auth
+module github.com/web-terminal/auth
 
 go 1.23
 
