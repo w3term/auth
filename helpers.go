@@ -48,6 +48,13 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		log.Printf("CORS request from origin: %s", origin)
 
+		// Allow requests with no origin (treated as same-origin requests)
+		if origin == "" {
+			log.Printf("Empty origin - treating as same-origin request")
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Only set CORS headers for allowed origins
 		if isOriginAllowed(origin) {
 			log.Printf("Origin allowed: %s", origin)
@@ -71,23 +78,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Write([]byte("Cross-origin request not allowed"))
 		}
 	})
-}
-
-// Sets CORS headers
-func enableCors(w *http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-
-	log.Printf("checking if CORS must be enabled for origin: %s", origin)
-
-	// Only sets Access-Control-Allow-Origin header if the origin is allowed
-	if isOriginAllowed(origin) {
-		(*w).Header().Set("Access-Control-Allow-Origin", origin)
-		(*w).Header().Set("Access-Control-Allow-Credentials", "true")
-		(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	}
-
-	// Don't set CORS headers if the origin is not allowed
 }
 
 // Cookie helpers

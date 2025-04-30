@@ -226,14 +226,6 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w, r)
-
-	// Handle preflight OPTIONS request
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 
 	// Get token from request
