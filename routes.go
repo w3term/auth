@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -21,7 +20,7 @@ func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Using callback URL: %s", redirectURI)
 
 	authURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user,read:org",
+		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user",
 		clientID, redirectURI,
 	)
 
@@ -30,10 +29,10 @@ func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
-	log.Printf("Incoming Request Headers:")
+	/*log.Printf("Incoming Request Headers:")
 	for k, v := range r.Header {
 		log.Printf("%s: %v", k, v)
-	}
+	}*/
 
 	log.Printf("Client IP: %s", r.RemoteAddr)
 	log.Printf("User Agent: %s", r.UserAgent())
@@ -90,7 +89,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("GitHub token response status: %d", resp.StatusCode)
-	log.Printf("GitHub token response headers: %+v", resp.Header)
+	//log.Printf("GitHub token response headers: %+v", resp.Header)
 	log.Printf("GitHub token response body: %s", string(body))
 
 	var tokenResp TokenResponse
@@ -109,12 +108,8 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Warning: Received unexpectedly short access token")
 	}
 
-	// Check if the token includes the read:org scope
-	if tokenResp.Scope == "" {
-		log.Printf("Warning: No scope information in token response")
-	} else if !strings.Contains(tokenResp.Scope, "read:org") {
-		log.Printf("Warning: Access token does not have read:org scope, organization check may fail")
-	}
+	// Check scope
+	log.Printf("Received token with scope: %s", tokenResp.Scope)
 
 	// Check if access token is empty
 	if tokenResp.AccessToken == "" {
@@ -126,11 +121,6 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received access token from GitHub: %s...", tokenResp.AccessToken[:min(10, len(tokenResp.AccessToken))])
 	log.Printf("Scope is %s", tokenResp.Scope)
-
-	// Check if the token includes the read:org scope
-	if !strings.Contains(tokenResp.Scope, "read:org") {
-		log.Printf("Warning: Access token does not have read:org scope, organization check may fail")
-	}
 
 	// Get user info from GitHub
 	userReq, err := http.NewRequest("GET", "https://api.github.com/user", nil)

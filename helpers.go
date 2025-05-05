@@ -143,10 +143,10 @@ func isUserInOrganization(accessToken string, username string) (bool, error) {
 	log.Printf("GitHub API response: %d %s", resp.StatusCode, resp.Status)
 
 	// For debugging, dump response headers
-	log.Printf("Response headers:")
+	/*log.Printf("Response headers:")
 	for name, values := range resp.Header {
 		log.Printf("  %s: %v", name, values)
-	}
+	}*/
 
 	// Status 204 No Content means the user is a member
 	if resp.StatusCode == 204 {
