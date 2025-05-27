@@ -179,22 +179,25 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		githubUser.ID, githubUser.Login)
 
 	// Check if user is in the specified organization
-	isOrgMember, err := isUserInOrganization(tokenResp.AccessToken, githubUser.Login)
-	if err != nil {
-		log.Printf("Error checking organization membership: %v", err)
-		http.Error(w, "Failed to verify organization membership", http.StatusInternalServerError)
-		return
+	orgName := os.Getenv("GITHUB_ORG_NAME")
+	if orgName != "" {
+		isOrgMember, err := isUserInOrganization(tokenResp.AccessToken, githubUser.Login, orgName)
+		if err != nil {
+			log.Printf("Error checking organization membership: %v", err)
+			http.Error(w, "Failed to verify organization membership", http.StatusInternalServerError)
+			return
+		}
+
+		if !isOrgMember {
+			log.Printf("Unauthorized user attempted login: %s (not in organization)", githubUser.Login)
+
+			// Redirect to an unauthorized page
+			http.Error(w, "User not in requested organization", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Authorized user logged in: %s (organization member)", githubUser.Login)
 	}
-
-	if !isOrgMember {
-		log.Printf("Unauthorized user attempted login: %s (not in organization)", githubUser.Login)
-
-		// Redirect to an unauthorized page
-		http.Error(w, "User not in requested organization", http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("Authorized user logged in: %s (organization member)", githubUser.Login)
 
 	// Create JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{

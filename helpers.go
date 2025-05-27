@@ -111,13 +111,7 @@ func extractCookieDomain(host string) string {
 // Auth helper
 
 // Checks if a user is a member of the specified GitHub organization
-func isUserInOrganization(accessToken string, username string) (bool, error) {
-	orgName := os.Getenv("GITHUB_ORG_NAME")
-	if orgName == "" {
-		log.Printf("GITHUB_ORG_NAME environment variable not set")
-		return false, fmt.Errorf("organization name not configured")
-	}
-
+func isUserInOrganization(accessToken string, username string, orgName string) (bool, error) {
 	log.Printf("Checking if %s is a member of organization %s", username, orgName)
 
 	// Check if user is in the organization
