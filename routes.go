@@ -197,6 +197,8 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("Authorized user logged in: %s (organization member)", githubUser.Login)
+	} else {
+		log.Printf("GITHUB_ORG_NAME not provided. No organization check will be done => user authorized.")
 	}
 
 	// Create JWT token
