@@ -17,7 +17,6 @@ func main() {
 	router := mux.NewRouter()
 
 	// Routes
-	router.HandleFunc("/auth/github/login", handleGitHubLogin).Methods("GET")
 	router.HandleFunc("/auth/github/callback", handleGitHubCallback).Methods("GET")
 	router.HandleFunc("/validate-token", validateToken).Methods("POST", "OPTIONS")
 

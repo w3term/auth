@@ -14,51 +14,56 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-func handleGitHubLogin(w http.ResponseWriter, r *http.Request) {
-	clientID := os.Getenv("GITHUB_CLIENT_ID")
-	redirectURI := os.Getenv("GITHUB_CALLBACK_URL")
-	log.Printf("Using callback URL: %s", redirectURI)
-
-	authURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=read:user",
-		clientID, redirectURI,
-	)
-
-	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
-}
-
 func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
-	/*log.Printf("Incoming Request Headers:")
-	for k, v := range r.Header {
-		log.Printf("%s: %v", k, v)
-	}*/
-
+	// Log incoming request details
+	/* for k, v := range r.Header { log.Printf("Incoming request header %s: %v", k, v) }*/
 	log.Printf("Client IP: %s", r.RemoteAddr)
 	log.Printf("User Agent: %s", r.UserAgent())
-
-	// Log all incoming request details
 	log.Printf("Incoming GitHub Callback Request:")
 	log.Printf("Full URL: %s", r.URL.String())
 	log.Printf("Query Parameters: %v", r.URL.Query())
 
-	// Log environment variables
-	webSiteURL := os.Getenv("WEBSITE_URL")
-	log.Printf("WEBSITE_URL: %s", webSiteURL)
-
+	// Make sure code is provided
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "Code parameter is required", http.StatusBadRequest)
 		return
 	}
 
+	// Make sure state is provided
+	state := r.URL.Query().Get("state")
+	if state == "" {
+		http.Error(w, "Code and state parameters are required", http.StatusBadRequest)
+		return
+	}
+	log.Printf("state was provided: %s", state)
+
+	// Extract GitHub Application name from state
+	gitHubAppName := extractAppFromState(state)
+	if gitHubAppName == "" {
+		log.Printf("Could not extract GitHub App name from state: %s", state)
+		http.Error(w, "Invalid state format", http.StatusBadRequest)
+		return
+	}
+	log.Printf("Processing callback for GitHub app: %s", gitHubAppName)
+
+	// Get the GitHub app config for this app name
+	githubApp, err := getGitHubAppConfig(gitHubAppName)
+	if err != nil {
+		log.Printf("Error getting GitHub app config: %v", err)
+		http.Error(w, "Invalid application configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Define webSiteURL, clientID and clientSecret
+	webSiteURL := githubApp.WebsiteURL
+	clientID := githubApp.ClientID
+	clientSecret := githubApp.ClientSecret
+	authorizationCallbackURL := githubApp.AuthorizationCallbackURL
+	log.Printf("GithubApp: %s / %s / %s / %s", webSiteURL, clientID, clientSecret[:min(5, len(clientSecret))], authorizationCallbackURL)
+
 	// Exchange code for access token
-	clientID := os.Getenv("GITHUB_CLIENT_ID")
-	clientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
-
-	log.Printf("Using GitHub OAuth credentials - Client ID: %s, Secret: %s...",
-		clientID, clientSecret[:min(5, len(clientSecret))])
-
 	requestBody, _ := json.Marshal(map[string]string{
 		"client_id":     clientID,
 		"client_secret": clientSecret,
@@ -67,6 +72,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequest("POST", "https://github.com/login/oauth/access_token", bytes.NewBuffer(requestBody))
 	if err != nil {
+		log.Printf("Error creating token exchange request: %v", err)
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
 		return
 	}
@@ -77,6 +83,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("Error exchanging code for token: %v", err)
 		http.Error(w, "Failed to exchange code for token", http.StatusInternalServerError)
 		return
 	}
@@ -84,6 +91,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("Error reading token response: %v", err)
 		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
 		return
 	}
@@ -107,9 +115,6 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("Warning: Received unexpectedly short access token")
 	}
-
-	// Check scope
-	log.Printf("Received token with scope: %s", tokenResp.Scope)
 
 	// Check if access token is empty
 	if tokenResp.AccessToken == "" {
@@ -205,15 +210,17 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"githubId": githubUser.ID,
 		"username": githubUser.Login,
+		"app":      gitHubAppName,
 		"exp":      time.Now().Add(time.Hour * 1).Unix(),
 		"issuedAt": time.Now().Unix(),
 	})
 
-	log.Printf("Creating JWT with claims - githubId: %d, username: %s",
-		githubUser.ID, githubUser.Login)
+	log.Printf("Creating JWT with claims - githubId: %d, username: %s, app: %s",
+		githubUser.ID, githubUser.Login, gitHubAppName)
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 	if err != nil {
+		log.Printf("Error signing JWT token: %v", err)
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
@@ -240,7 +247,7 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Constructed Redirect Full URL: %s", redirectURL)
 
-	// Try using the parsed URL
+	// Validate redirect URL
 	parsedURL, err := url.Parse(redirectURL)
 	if err != nil {
 		log.Printf("Error parsing redirect URL: %v", err)
@@ -248,17 +255,14 @@ func handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try multiple redirect methods
-	log.Printf("Attempting redirect:")
-	log.Printf("1. Full URL: %s", redirectURL)
-	log.Printf("2. Parsed URL: %v", parsedURL)
+	log.Printf("Parsed URL: %v", parsedURL)
 
-	// Method 1: Standard redirect
+	// Standard redirect
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 
 	// If that doesn't work, try manual header setting
-	w.Header().Set("Location", redirectURL)
-	w.WriteHeader(http.StatusTemporaryRedirect)
+	//w.Header().Set("Location", redirectURL)
+	//w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
 func validateToken(w http.ResponseWriter, r *http.Request) {

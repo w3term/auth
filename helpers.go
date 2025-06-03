@@ -7,6 +7,16 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Global config cache with thread safety
+var (
+	githubConfig *GitHubConfig
+	configMutex  sync.RWMutex
+	configLoaded bool
 )
 
 // CORS helpers
@@ -155,6 +165,76 @@ func isUserInOrganization(accessToken string, username string, orgName string) (
 		log.Printf("Unexpected API response: %s", string(body))
 		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
+}
+
+// Extract GitHub application name from state
+func extractAppFromState(state string) string {
+	parts := strings.Split(state, "_")
+	if len(parts) >= 2 {
+		return parts[len(parts)-1]
+	}
+	return ""
+}
+
+// Load GitHub configuration from file
+func loadGitHubConfig() (*GitHubConfig, error) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	// Return cached config if already loaded
+	if configLoaded && githubConfig != nil {
+		return githubConfig, nil
+	}
+
+	configPath := os.Getenv("GITHUB_CONFIG_PATH")
+	if configPath == "" {
+		configPath = "/etc/config/github-apps.yaml"
+	}
+
+	log.Printf("Loading GitHub configuration from: %s", configPath)
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	var config GitHubConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML config: %v", err)
+	}
+
+	// Validate configuration
+	if len(config.GitHubApplications) == 0 {
+		return nil, fmt.Errorf("no GitHub applications configured")
+	}
+
+	githubConfig = &config
+	configLoaded = true
+
+	log.Printf("Successfully loaded GitHub configuration with %d applications:", len(config.GitHubApplications))
+	for appName := range config.GitHubApplications {
+		log.Printf("  - %s", appName)
+	}
+
+	return githubConfig, nil
+}
+
+// Get GitHub app configuration by name
+func getGitHubAppConfig(appName string) (*GitHubApp, error) {
+	// Load config if not already loaded
+	config, err := loadGitHubConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+
+	if app, exists := config.GitHubApplications[appName]; exists {
+		return &app, nil
+	}
+
+	return nil, fmt.Errorf("GitHub application '%s' not found in configuration", appName)
 }
 
 // Generic helpers
