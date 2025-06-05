@@ -19,7 +19,7 @@ var (
 	configLoaded bool
 )
 
-// CORS helpers
+// CORS helpers //
 
 // Returns a list of origins allowed for CORS
 func getAllowedOrigins() []string {
