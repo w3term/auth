@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/w3term/auth/compare/v1.0.1...v1.0.2) (2025-11-12)
+
+
+### Bug Fixes
+
+* ensure build is triggered after a successull tag creation ([501fa3d](https://github.com/w3term/auth/commit/501fa3d3e04c7f5dab314fa680589d2084036d6f))
+
 ## [1.0.1](https://github.com/w3term/auth/compare/v1.0.0...v1.0.1) (2025-11-12)
 
 
