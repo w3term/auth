@@ -1,11 +1,13 @@
-name: CI/CD Pipeline
+name: Build and Push Image
 
 on:
   push:
     branches:
       - develop
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -18,10 +20,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Fetch tags
+        if: github.event_name == 'workflow_run'
+        run: git fetch --tags --force
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -33,23 +43,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Figure out if this is a branch or a tag push
-      - name: Define image tags
+      - name: Define build variables
         id: vars
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          GITHUB_REF_TYPE: ${{ github.ref_type }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
         run: |
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            echo "tags=$REGISTRY/$IMAGE_NAME:$GITHUB_REF_NAME,$REGISTRY/$IMAGE_NAME:latest" >> $GITHUB_OUTPUT
-            echo "version=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+          # Get the commit SHA
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
           else
-            echo "tags=$REGISTRY/$IMAGE_NAME:$GITHUB_SHA" >> $GITHUB_OUTPUT
-            echo "version=$GITHUB_SHA" >> $GITHUB_OUTPUT
+            COMMIT_SHA="${{ github.sha }}"
           fi
+          
+          # Determine image tag
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # Find the tag for this commit
+            TAG_NAME=$(git describe --tags --exact-match 2>/dev/null || echo "")
+            if [[ -n "$TAG_NAME" ]]; then
+              IMAGE_TAG="$TAG_NAME"
+              # Apply 'latest' tag for releases
+              IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            else
+              IMAGE_TAG="$COMMIT_SHA"
+              IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
+            fi
+          else
+            # develop branch - use commit SHA only
+            IMAGE_TAG="$COMMIT_SHA"
+            IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
+          fi
+          
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_tags=$IMAGE_TAGS" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -57,9 +81,9 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.vars.outputs.tags }}
+          tags: ${{ steps.vars.outputs.image_tags }}
           build-args: |
-            CI_COMMIT_SHA=${{ github.sha }}
-            CI_COMMIT_TAG=${{ github.ref_name }}
-            CI_COMMIT_MESSAGE=${{ github.event.head_commit.message }}
-            APP_VERSION=${{ steps.vars.outputs.version }}
+            CI_COMMIT_SHA=${{ steps.vars.outputs.commit_sha }}
+            CI_COMMIT_TAG=${{ steps.vars.outputs.image_tag }}
+            CI_COMMIT_MESSAGE=${{ github.event.head_commit.message || github.event.workflow_run.head_commit.message || '' }}
+            APP_VERSION=${{ steps.vars.outputs.image_tag }}
