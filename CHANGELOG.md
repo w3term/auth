@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/w3term/auth/compare/v1.0.3...v1.0.4) (2025-11-12)
+
+
+### Bug Fixes
+
+* no tag were retrieved ([d3a2fb9](https://github.com/w3term/auth/commit/d3a2fb92c530a1ba46894efadbc6a24fe6591c4c))
+
 ## [1.0.3](https://github.com/w3term/auth/compare/v1.0.2...v1.0.3) (2025-11-12)
 
 
