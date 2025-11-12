@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/w3term/auth/compare/v1.0.2...v1.0.3) (2025-11-12)
+
+
+### Bug Fixes
+
+* ensure the correct tag is retrieved ([9bf1237](https://github.com/w3term/auth/commit/9bf1237ab0636513f3d21ffa04a0e976a631fb0f))
+
 ## [1.0.2](https://github.com/w3term/auth/compare/v1.0.1...v1.0.2) (2025-11-12)
 
 
