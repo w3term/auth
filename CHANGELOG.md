@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/w3term/auth/compare/v1.0.0...v1.0.1) (2025-11-12)
+
+
+### Bug Fixes
+
+* reference correct token ([2e30e5c](https://github.com/w3term/auth/commit/2e30e5c94e43913fdbd8002db6e1dbdd17e4baf8))
+* use PAT for CI ([a5c2806](https://github.com/w3term/auth/commit/a5c2806ef12c0649c3446378ef5cf82977e8a063))
+
 # 1.0.0 (2025-11-12)
 
 
