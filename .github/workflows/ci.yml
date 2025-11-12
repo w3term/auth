@@ -72,6 +72,8 @@ jobs:
           node-version: 20
 
       - name: Install dependencies and run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           touch CHANGELOG.md
           npm install @semantic-release/github @semantic-release/exec @semantic-release/changelog
