@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/w3term/auth/compare/v1.0.4...v1.0.5) (2025-11-12)
+
+
+### Bug Fixes
+
+* get the latest created tag when build is triggered by Release job ([d252c77](https://github.com/w3term/auth/commit/d252c77eb353f8c6b5c16a87b90c4c377b6e02ac))
+
 ## [1.0.4](https://github.com/w3term/auth/compare/v1.0.3...v1.0.4) (2025-11-12)
 
 
