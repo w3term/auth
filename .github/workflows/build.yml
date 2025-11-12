@@ -47,17 +47,10 @@ jobs:
       - name: Define build variables
         id: vars
         run: |
-          # Get the commit SHA
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-          else
-            COMMIT_SHA="${{ github.sha }}"
-          fi
-          
-          # Determine image tag
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # Find the tag pointing at this commit
-            TAG_NAME=$(git tag --points-at $COMMIT_SHA)
+            # Get tag name pointing to this SHA from remote
+            TAG_NAME=$(git ls-remote --tags origin | grep $COMMIT_SHA | grep -o 'refs/tags/v.*' | sed 's#refs/tags/##' | head -n1)
             if [[ -n "$TAG_NAME" ]]; then
               IMAGE_TAG="$TAG_NAME"
               IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
@@ -67,10 +60,10 @@ jobs:
             fi
           else
             # develop branch - use commit SHA only
-            IMAGE_TAG="$COMMIT_SHA"
+            IMAGE_TAG="${GITHUB_SHA}"
             IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG"
           fi
-          
+
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "image_tags=$IMAGE_TAGS" >> $GITHUB_OUTPUT
