@@ -4,12 +4,11 @@ on:
   push:
     branches:
       - develop
-      - main
     tags:
-      - '*'
+      - 'v*'
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 env:
@@ -18,9 +17,8 @@ env:
 
 jobs:
   build:
-    name: Build and Push Docker Image
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,31 +63,3 @@ jobs:
             CI_COMMIT_TAG=${{ github.ref_name }}
             CI_COMMIT_MESSAGE=${{ github.event.head_commit.message }}
             APP_VERSION=${{ steps.vars.outputs.version }}
-
-  release:
-    name: Semantic Release
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies and run semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          touch CHANGELOG.md
-          npm install @semantic-release/github @semantic-release/exec @semantic-release/changelog
-          npx semantic-release
-
-      - name: Upload changelog
-        uses: actions/upload-artifact@v4
-        with:
-          name: changelog
-          path: CHANGELOG.md
