@@ -28,6 +28,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
           fetch-depth: 0
+          tags: true
 
       - name: Fetch tags
         if: github.event_name == 'workflow_run'
@@ -55,11 +56,10 @@ jobs:
           
           # Determine image tag
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # Find the tag for this commit
-            TAG_NAME=$(git describe --tags --exact-match 2>/dev/null || echo "")
+            # Find the tag pointing at this commit
+            TAG_NAME=$(git tag --points-at $COMMIT_SHA)
             if [[ -n "$TAG_NAME" ]]; then
               IMAGE_TAG="$TAG_NAME"
-              # Apply 'latest' tag for releases
               IMAGE_TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$IMAGE_TAG,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             else
               IMAGE_TAG="$COMMIT_SHA"
