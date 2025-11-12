@@ -7,6 +7,9 @@ on:
       - main
     tags:
       - '*'
+      
+permissions:
+  contents: write
 
 env:
   REGISTRY: ghcr.io
@@ -34,15 +37,20 @@ jobs:
       # Figure out if this is a branch or a tag push
       - name: Define image tags
         id: vars
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            # For tag pushes (e.g., v1.2.0)
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF_NAME},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
-            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "tags=$REGISTRY/$IMAGE_NAME:$GITHUB_REF_NAME,$REGISTRY/$IMAGE_NAME:latest" >> $GITHUB_OUTPUT
+            echo "version=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
           else
-            # For branch pushes (e.g., develop)
-            echo "tags=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
-            echo "version=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+            echo "tags=$REGISTRY/$IMAGE_NAME:$GITHUB_SHA" >> $GITHUB_OUTPUT
+            echo "version=$GITHUB_SHA" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
